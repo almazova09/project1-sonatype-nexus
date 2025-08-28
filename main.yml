@@ -8,7 +8,7 @@
     nexus_base: /opt
     nexus_dir: "{{ nexus_base }}/nexus"
     nexus_data: /opt/sonatype-work
-    nexus_tar_url: "https://download.sonatype.com/nexus/3/nexus-3.68.0-04-unix.tar.gz
+    nexus_tar_url: "https://download.sonatype.com/nexus/3/nexus-3.68.0-04-unix.tar.gz"
     nexus_tar: /tmp/nexus-latest-unix.tar.gz
     java_pkg: openjdk-8-jdk
 
