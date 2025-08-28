@@ -4,22 +4,18 @@ packer {
       version = "1.2.8"
       source  = "github.com/hashicorp/amazon"
     }
+    ansible = {
+      version = "~> 1"
+      source  = "github.com/hashicorp/ansible"
+    }
   }
 }
 
 source "amazon-ebs" "ubuntu" {
-  ami_name      = "Sonatype-Nexus"
+  ami_name      = "Sonatype-Nexus-{{ timestamp }}"
   instance_type = "t2.medium"
   region        = "us-east-1"
-  source_ami_filter {
-    filters = {
-      name                = "ubuntu/images/*ubuntu-jammy-22.04-amd64-server-*"
-      root-device-type    = "ebs"
-      virtualization-type = "hvm"
-    }
-    most_recent = true
-    owners      = ["099720109477"]
-  }
+  source_ami    = "ami-0bbdd8c17ed981ef9"
   ssh_username = "ubuntu"
   ssh_keypair_name = "bastion-host-key"
   ssh_private_key_file = "~/.ssh/id_rsa"
@@ -30,4 +26,16 @@ build {
   sources = [
     "source.amazon-ebs.ubuntu"
   ]
+
+  provisioner "shell" {
+    script = "script.sh"
+  }
+
+  provisioner "shell" {
+    inline = ["sleep 20"]
+  }
+
+  provisioner "ansible" {
+    playbook_file = "main.yml"
+  }
 }
