@@ -1,0 +1,97 @@
+- name: Install & configure Sonatype Nexus 3
+  hosts: nexus
+  become: yes
+
+  vars:
+    nexus_user: nexus
+    nexus_group: nexus
+    nexus_base: /opt
+    nexus_dir: "{{ nexus_base }}/nexus"
+    nexus_data: /opt/sonatype-work
+    nexus_tar_url: "https://download.sonatype.com/nexus/3/nexus-3.68.0-04-unix.tar.gz
+    nexus_tar: /tmp/nexus-latest-unix.tar.gz
+    java_pkg: openjdk-8-jdk
+
+  tasks:
+    - name: Install Java and tools
+      apt:
+        name: [ "{{ java_pkg }}", wget, tar ]
+        state: present
+        update_cache: yes
+
+    - name: Ensure group exists
+      group: { name: "{{ nexus_group }}", state: present }
+
+    - name: Ensure user exists
+      user:
+        name: "{{ nexus_user }}"
+        group: "{{ nexus_group }}"
+        create_home: no
+        shell: /usr/sbin/nologin
+
+    - name: Create data directory
+      file:
+        path: "{{ nexus_data }}"
+        state: directory
+        owner: "{{ nexus_user }}"
+        group: "{{ nexus_group }}"
+        mode: "0755"
+
+    - name: Download Nexus tarball
+      get_url: { url: "{{ nexus_tar_url }}", dest: "{{ nexus_tar }}", mode: "0644" }
+
+    - name: Extract Nexus into {{ nexus_base }}
+      unarchive:
+        src: "{{ nexus_tar }}"
+        dest: "{{ nexus_base }}"
+        remote_src: yes
+        creates: "{{ nexus_base }}/nexus-3"
+
+    - name: Find extracted Nexus directory
+      shell: "ls -d {{ nexus_base }}/nexus-3* | head -n1"
+      args: { warn: no }
+      register: nexus_extracted
+      changed_when: no
+
+    - name: Symlink {{ nexus_dir }} -> extracted folder
+      file: { src: "{{ nexus_extracted.stdout }}", dest: "{{ nexus_dir }}", state: link, force: yes }
+
+    - name: Set run_as_user in nexus.rc
+      lineinfile:
+        path: "{{ nexus_dir }}/bin/nexus.rc"
+        regexp: '^#?run_as_user='
+        line: "run_as_user={{ nexus_user }}"
+        create: yes
+
+    - name: Set ownership for dirs
+      file:
+        path: "{{ item }}"
+        owner: "{{ nexus_user }}"
+        group: "{{ nexus_group }}"
+      loop: [ "{{ nexus_dir }}", "{{ nexus_data }}" ]
+
+    - name: Create systemd service
+      copy:
+        dest: /etc/systemd/system/nexus.service
+        mode: "0644"
+        content: |
+          [Unit]
+          Description=Nexus Repository Manager
+          After=network.target
+          [Service]
+          Type=forking
+          LimitNOFILE=65536
+          ExecStart={{ nexus_dir }}/bin/nexus start
+          ExecStop={{ nexus_dir }}/bin/nexus stop
+          User={{ nexus_user }}
+          Restart=on-abort
+          [Install]
+          WantedBy=multi-user.target
+      notify: Reload systemd
+
+    - name: Enable and start Nexus
+      systemd: { name: nexus, enabled: yes, state: started }
+
+  handlers:
+    - name: Reload systemd
+      systemd: { daemon_reload: yes }
